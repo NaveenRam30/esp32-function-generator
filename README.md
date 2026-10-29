@@ -1,7 +1,7 @@
 # ESP32 Function Generator – PC control GUI
 
 Python/Tkinter front-end for an ESP32 that generates the real waveform.
-The PC only **configures**, **previews**, **sends commands** and **shows what the ESP32 reports**. Nothing is simulated in Python.
+The PC only **configures**, **previews**, **sends commands** and **shows what the ESP32 reports**. The plotted waveform is a software estimate, not a measurement of the physical output.
 
 ## Install and run
 
@@ -14,7 +14,27 @@ python main.py
 
 Tkinter ships with Python on Windows/macOS. On Debian/Ubuntu: `sudo apt install python3-tk`.
 On Linux you may need serial permission: `sudo usermod -aG dialout $USER` (then log out/in).
-The window is designed for about 1400 x 990 px.
+The window fits the available screen and can be resized or maximized. The waveform
+occupies the main workspace; the settings panel scrolls on smaller displays.
+
+## Updated GUI
+
+To update your existing installation, replace **gui.py** with the file from this
+archive and run `python main.py` as before. There are no new Python dependencies,
+firmware changes, wiring changes, or changes to the serial commands.
+
+- **Waveform preview:** larger plot, thicker trace, readable axes, and large frequency/amplitude readouts.
+- **Focus preview:** hides settings, connection controls, and the lower readouts to enlarge the plot. Use **Restore workspace** or **Esc** to return. Output buttons remain accessible.
+- **F11:** toggle full screen. **Esc** exits full screen and focus view.
+- **Cycles:** show 2, 4, or 8 periods. This changes the preview only.
+- **Scale:** **Fit waveform** enlarges the configured waveform vertically; **Hardware range** shows the full selected hardware range. Neither changes the generated signal. Dashed hardware-limit lines are visible when they fall within the displayed voltage range.
+- **Settings tabs:** **Signal** contains parameters and presets, **Sweep** contains the existing sweep controls, and **Output stage** contains the existing voltage-range selection and warnings.
+- **Show details & log:** opens a separate resizable window with Output details, Device status, Monitoring, and Serial log tabs. Opening it never reduces the preview size.
+- Drag the divider between settings and preview to adjust their widths. Scroll the settings panel if needed.
+
+Start, Stop, Pause/Resume, Reset, presets, input validation, live update, sweep,
+serial polling, and hardware-limit confirmation retain their original behavior.
+Only `gui.py` and this README were changed; generated Python cache files are omitted.
 
 ## Files
 
