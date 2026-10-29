@@ -9,9 +9,11 @@ import math
 import time
 import tkinter as tk
 from tkinter import messagebox, ttk
+from tkinter import font as tkfont
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from matplotlib.ticker import AutoMinorLocator, MaxNLocator
 
 import calculations
 import config
@@ -21,17 +23,30 @@ from config import COLORS as C
 from config import GeneratorSettings
 from serial_manager import SerialError, SerialManager, list_serial_ports
 
-FONT_UI = ("Helvetica", 10)
-FONT_BOLD = ("Helvetica", 10, "bold")
-FONT_MONO = ("Courier", 11, "bold")
-FONT_BIG = ("Helvetica", 22, "bold")
-FONT_CHIP = ("Helvetica", 16, "bold")
+# Presentation only: hardware defaults and the wire protocol remain in config.py.
+C = dict(C, bg="#0b1220", header="#101b2d", panel="#111e30",
+         panel2="#1b2c43", hover="#273e58", field="#0b1525",
+         border="#2b4059", fg="#edf3fc", dim="#a1b3cb", accent="#65d6ff",
+         trace="#60efbe", plot_bg="#091321", grid="#20334a")
+FONT_UI = ("Segoe UI", 10)
+FONT_BOLD = ("Segoe UI", 10, "bold")
+FONT_MONO = ("Consolas", 11)
+FONT_BIG = ("Segoe UI", 22, "bold")
+FONT_CHIP = ("Segoe UI", 16, "bold")
 
 
 # ======================================================================
 # Styling
 # ======================================================================
 def apply_style(root: tk.Tk):
+    global FONT_UI, FONT_BOLD, FONT_MONO, FONT_BIG, FONT_CHIP
+    families = {name.casefold(): name for name in tkfont.families(root)}
+    ui = next((families[name.casefold()] for name in ("Segoe UI", "DejaVu Sans", "Helvetica")
+               if name.casefold() in families), tkfont.nametofont("TkDefaultFont").actual("family"))
+    mono = next((families[name.casefold()] for name in ("Consolas", "DejaVu Sans Mono", "Courier")
+                 if name.casefold() in families), tkfont.nametofont("TkFixedFont").actual("family"))
+    FONT_UI, FONT_BOLD = (ui, 10), (ui, 10, "bold")
+    FONT_MONO, FONT_BIG, FONT_CHIP = (mono, 11), (ui, 22, "bold"), (ui, 16, "bold")
     root.configure(bg=C["bg"])
     st = ttk.Style(root)
     st.theme_use("clam")
@@ -44,14 +59,14 @@ def apply_style(root: tk.Tk):
                  foreground=C["accent"], font=FONT_BOLD)
     st.configure("Panel.TFrame", background=C["panel"])
     st.configure("TButton", background=C["panel2"], foreground=C["fg"],
-                 padding=(8, 4), borderwidth=1)
+                 padding=(12, 7), borderwidth=0)
     st.map("TButton",
            background=[("active", C["hover"]), ("disabled", C["panel"])],
            foreground=[("disabled", C["dim"])])
     st.configure("TEntry", fieldbackground=C["field"], foreground=C["fg"],
-                 insertcolor=C["fg"])
+                 insertcolor=C["fg"], padding=(7, 5))
     st.configure("Bad.TEntry", fieldbackground=C["bad_bg"], foreground=C["err"],
-                 insertcolor=C["fg"])
+                 insertcolor=C["fg"], padding=(7, 5))
     st.map("TEntry", fieldbackground=[("disabled", C["panel"])],
            foreground=[("disabled", C["dim"])])
     st.map("TCombobox",
@@ -72,6 +87,18 @@ def apply_style(root: tk.Tk):
     st.map("TCheckbutton", background=[("active", C["panel"])])
     st.map("Root.TCheckbutton", background=[("active", C["bg"])])
 
+    st.configure("TNotebook", background=C["bg"], borderwidth=0, tabmargins=(0, 0, 0, 7))
+    st.configure("TNotebook.Tab", background=C["header"], foreground=C["dim"],
+                 padding=(14, 8), font=FONT_BOLD, borderwidth=0)
+    st.map("TNotebook.Tab", background=[("selected", C["panel"])],
+           foreground=[("selected", C["accent"])])
+    st.configure("TCombobox", padding=(6, 5), arrowsize=14)
+    st.configure("Primary.TButton", background=C["accent"], foreground=C["bg"], font=FONT_BOLD)
+    st.map("Primary.TButton", background=[("active", "#a3e7ff"), ("disabled", C["panel2"])],
+           foreground=[("disabled", C["dim"])])
+    st.configure("Vertical.TScrollbar", background=C["panel2"], troughcolor=C["bg"],
+                 borderwidth=0, arrowsize=12)
+
 
 def kv_grid(parent, items, ncols=2, start_row=0):
     """Create 'label  value' pairs in a grid; returns {key: value_label}."""
@@ -80,9 +107,9 @@ def kv_grid(parent, items, ncols=2, start_row=0):
         r = start_row + i // ncols
         c = (i % ncols) * 2
         ttk.Label(parent, text=text, foreground=C["dim"]).grid(
-            row=r, column=c, sticky="w", padx=(6, 4), pady=1)
+            row=r, column=c, sticky="w", padx=(6, 4), pady=4)
         lbl = ttk.Label(parent, text="\u2014", font=FONT_MONO)
-        lbl.grid(row=r, column=c + 1, sticky="w", padx=(0, 10), pady=1)
+        lbl.grid(row=r, column=c + 1, sticky="w", padx=(0, 10), pady=4)
         labels[key] = lbl
     return labels
 
@@ -324,8 +351,14 @@ class FunctionGeneratorApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         root.title(config.APP_TITLE)
-        root.geometry("1400x990")
-        root.minsize(1150, 820)
+        # Fit laptop screens; retain the existing Windows high-DPI setup in main.py.
+        self.ui_scale = max(1.0, root.winfo_fpixels("1i") / 96.0)
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        width = min(round(1500 * self.ui_scale), sw - 48)
+        height = min(round(920 * self.ui_scale), sh - 90)
+        root.geometry(f"{width}x{height}+20+20")
+        root.minsize(min(round(1100 * self.ui_scale), sw - 48),
+                     min(round(680 * self.ui_scale), sh - 90))
         apply_style(root)
         root.report_callback_exception = self._on_tk_exception
 
@@ -359,84 +392,131 @@ class FunctionGeneratorApp:
     # UI construction
     # ==================================================================
     def _panel(self, parent, title):
-        return ttk.LabelFrame(parent, text=f" {title} ", padding=6)
+        return ttk.LabelFrame(parent, text=f" {title} ", padding=10)
 
     def _build_ui(self):
         r = self.root
         r.columnconfigure(0, weight=1)
-        r.rowconfigure(2, weight=1)          # preview grows with the window
+        r.rowconfigure(2, weight=1)
+        self._focused = False
+        self._details_visible = False
         self._build_header()
+        self._build_connection(r)
+
+        self.workspace = tk.PanedWindow(r, orient="horizontal", bg=C["bg"],
+                                        sashwidth=8, bd=0, sashrelief="flat",
+                                        opaqueresize=True)
+        self.workspace.grid(row=2, column=0, sticky="nsew", padx=16, pady=(4, 10))
+        self.sidebar = tk.Frame(self.workspace, bg=C["bg"])
+        self.main_area = tk.Frame(self.workspace, bg=C["bg"])
+        self.workspace.add(self.sidebar, minsize=round(395 * self.ui_scale),
+                           width=round(440 * self.ui_scale), stretch="never")
+        self.workspace.add(self.main_area, minsize=round(600 * self.ui_scale), stretch="always")
+        self.main_area.columnconfigure(0, weight=1)
+        self.main_area.rowconfigure(0, weight=1)
         self._build_top()
         self._build_preview()
         self._build_summary()
+        self._build_details()
         self._build_buttons()
-        self._build_log()
+        self.msg_lbl = tk.Label(r, text="Ready. Connect your ESP32 to enable output controls.",
+                                anchor="w", bg=C["header"], fg=C["dim"], font=FONT_UI,
+                                padx=18, pady=6)
+        self.msg_lbl.grid(row=4, column=0, sticky="ew")
+        r.bind("<F11>", self._toggle_fullscreen)
+        r.bind("<Escape>", self._exit_focus)
 
-    # ---------------------------------------------------------- header
     def _build_header(self):
         hdr = tk.Frame(self.root, bg=C["header"])
         hdr.grid(row=0, column=0, sticky="ew")
-        tk.Label(hdr, text=config.APP_TITLE, bg=C["header"], fg=C["accent"],
-                 font=("Helvetica", 18, "bold")).pack(side="left", padx=16, pady=8)
-        self.hdr_state = tk.Label(hdr, text="\u25cf DISCONNECTED", bg=C["header"],
-                                  fg=C["err"], font=("Helvetica", 13, "bold"))
-        self.hdr_state.pack(side="right", padx=16)
+        brand = tk.Frame(hdr, bg=C["header"])
+        brand.pack(side="left", padx=18, pady=12)
+        tk.Label(brand, text="FUNCTION GENERATOR", bg=C["header"], fg=C["fg"],
+                 font=(FONT_UI[0], 19, "bold")).pack(anchor="w")
+        tk.Label(brand, text="ESP32  /  Signal control & waveform preview", bg=C["header"],
+                 fg=C["dim"], font=FONT_UI).pack(anchor="w", pady=(2, 0))
+        self.hdr_state = tk.Label(hdr, text="● DISCONNECTED", bg=C["header"],
+                                  fg=C["err"], font=FONT_BOLD)
+        self.hdr_state.pack(side="right", padx=20)
+        self.state_lbl = tk.Label(hdr, text="OFFLINE", bg=C["header"],
+                                  fg=C["dim"], font=FONT_BOLD)
+        self.state_lbl.pack(side="right", padx=18)
 
-    # ------------------------------------------------- three-column area
+    def _scroll_page(self, notebook, title):
+        """Keep controls reachable when the window or display is small."""
+        page = tk.Frame(notebook, bg=C["bg"])
+        notebook.add(page, text=title)
+        page.rowconfigure(0, weight=1)
+        page.columnconfigure(0, weight=1)
+        canvas = tk.Canvas(page, bg=C["bg"], bd=0, highlightthickness=0, width=1)
+        bar = ttk.Scrollbar(page, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=bar.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        bar.grid(row=0, column=1, sticky="ns")
+        inner = tk.Frame(canvas, bg=C["bg"])
+        inner.columnconfigure(0, weight=1)
+        win = canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(win, width=e.width))
+        # Local bindings avoid stealing mouse-wheel input from other panels.
+        def wheel(event):
+            if inner.winfo_reqheight() <= canvas.winfo_height():
+                return
+            if getattr(event, "num", None) in (4, 5):
+                step = -1 if event.num == 4 else 1
+            else:
+                step = -1 if event.delta > 0 else 1
+            canvas.yview_scroll(step * 3, "units")
+            return "break"
+        def bind_children(widget):
+            if not isinstance(widget, (ttk.Combobox, ttk.Scale)):
+                for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+                    widget.bind(sequence, wheel, add="+")
+            for child in widget.winfo_children():
+                bind_children(child)
+        self.root.after_idle(lambda: bind_children(page))
+        return inner
+
     def _build_top(self):
-        top = tk.Frame(self.root, bg=C["bg"])
-        top.grid(row=1, column=0, sticky="ew", padx=10, pady=(8, 4))
-        top.columnconfigure(0, weight=2, uniform="col")
-        top.columnconfigure(1, weight=3, uniform="col")
-        top.columnconfigure(2, weight=3, uniform="col")
-        left = tk.Frame(top, bg=C["bg"])
-        mid = tk.Frame(top, bg=C["bg"])
-        right = tk.Frame(top, bg=C["bg"])
-        left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
-        mid.grid(row=0, column=1, sticky="nsew", padx=6)
-        right.grid(row=0, column=2, sticky="nsew", padx=(6, 0))
-        for col in (left, mid, right):
-            col.columnconfigure(0, weight=1)
-        self._build_connection(left)
-        self._build_presets(left)
-        self._build_sweep(left)
-        self._build_config(mid)
-        self._build_hardware(mid)
-        self._build_esp_status(right)
-        self._build_output_info(right)
-        self._build_monitor(right)
+        self.sidebar.columnconfigure(0, weight=1)
+        self.sidebar.rowconfigure(1, weight=1)
+        tk.Label(self.sidebar, text="SIGNAL SETTINGS", bg=C["bg"], fg=C["dim"],
+                 font=FONT_BOLD, anchor="w").grid(row=0, column=0, sticky="ew", pady=(2, 10))
+        self.settings_tabs = ttk.Notebook(self.sidebar)
+        self.settings_tabs.grid(row=1, column=0, sticky="nsew")
+        signal = self._scroll_page(self.settings_tabs, "Signal")
+        sweep = self._scroll_page(self.settings_tabs, "Sweep")
+        hardware = self._scroll_page(self.settings_tabs, "Output stage")
+        self._build_config(signal)
+        self._build_presets(signal)
+        self._build_sweep(sweep)
+        self._build_hardware(hardware)
+        ttk.Label(hardware, text="The amber dashed lines in the preview mark the selected "
+                  "output limits. Orange traces indicate a requested signal beyond those limits.",
+                  foreground=C["dim"], wraplength=340).grid(row=2, column=0, sticky="ew", padx=12, pady=12)
 
     def _build_connection(self, parent):
-        p = self._panel(parent, "CONNECTION")
-        p.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        p = tk.Frame(parent, bg=C["bg"])
+        self.connection_bar = p
+        p.grid(row=1, column=0, sticky="ew", padx=18, pady=(10, 12))
         p.columnconfigure(1, weight=1)
-        ttk.Label(p, text="COM Port").grid(row=0, column=0, sticky="w", padx=6, pady=3)
+        tk.Label(p, text="SERIAL PORT", bg=C["bg"], fg=C["dim"], font=FONT_BOLD).grid(
+            row=0, column=0, sticky="w", padx=(0, 10))
         self.port_var = tk.StringVar()
-        self.port_combo = ttk.Combobox(p, textvariable=self.port_var, width=26,
-                                       state="readonly")
-        self.port_combo.grid(row=0, column=1, sticky="ew", padx=4)
-        ttk.Button(p, text="Refresh", width=8, command=self._refresh_ports).grid(
-            row=0, column=2, padx=(0, 4))
-        ttk.Label(p, text="Baud Rate").grid(row=1, column=0, sticky="w", padx=6, pady=3)
+        self.port_combo = ttk.Combobox(p, textvariable=self.port_var, width=28, state="readonly")
+        self.port_combo.grid(row=0, column=1, sticky="ew", padx=(0, 8))
+        ttk.Button(p, text="Refresh", command=self._refresh_ports).grid(row=0, column=2, padx=(0, 16))
+        tk.Label(p, text="BAUD", bg=C["bg"], fg=C["dim"], font=FONT_BOLD).grid(row=0, column=3)
         self.baud_var = tk.StringVar(value=str(config.DEFAULT_BAUD))
-        ttk.Combobox(p, textvariable=self.baud_var, width=12, state="readonly",
-                     values=[str(b) for b in config.BAUD_RATES]).grid(
-            row=1, column=1, sticky="w", padx=4)
-        btns = ttk.Frame(p, style="Panel.TFrame")
-        btns.grid(row=2, column=0, columnspan=3, sticky="ew", pady=4)
-        self.btn_connect = ttk.Button(btns, text="Connect", command=self.on_connect)
-        self.btn_connect.pack(side="left", padx=4)
-        self.btn_disconnect = ttk.Button(btns, text="Disconnect",
-                                         command=self.on_disconnect)
-        self.btn_disconnect.pack(side="left", padx=4)
-        self.conn_status = ttk.Label(p, text="\u25cf Disconnected",
-                                     foreground=C["err"], font=FONT_BOLD)
-        self.conn_status.grid(row=3, column=0, columnspan=3, sticky="w", padx=6)
-        self.conn_port = ttk.Label(p, text="Port: \u2014", foreground=C["dim"])
-        self.conn_port.grid(row=4, column=0, columnspan=3, sticky="w", padx=6)
+        ttk.Combobox(p, textvariable=self.baud_var, width=8, state="readonly",
+                     values=[str(b) for b in config.BAUD_RATES]).grid(row=0, column=4, padx=8)
+        self.btn_connect = ttk.Button(p, text="Connect", style="Primary.TButton", command=self.on_connect)
+        self.btn_connect.grid(row=0, column=5, padx=(8, 6))
+        self.btn_disconnect = ttk.Button(p, text="Disconnect", command=self.on_disconnect)
+        self.btn_disconnect.grid(row=0, column=6)
 
     def _build_presets(self, parent):
-        p = self._panel(parent, "PRESETS")
+        p = self._panel(parent, "Quick presets")
         p.grid(row=1, column=0, sticky="ew", pady=6)
         p.columnconfigure((0, 1), weight=1)
         for i, name in enumerate(config.PRESETS):
@@ -449,7 +529,7 @@ class FunctionGeneratorApp:
             row=3, column=0, columnspan=2, sticky="w", padx=4, pady=(4, 0))
 
     def _build_sweep(self, parent):
-        p = self._panel(parent, "FREQUENCY SWEEP")
+        p = self._panel(parent, "Frequency sweep")
         p.grid(row=2, column=0, sticky="ew", pady=(6, 0))
         p.columnconfigure(3, weight=1)
         noop = lambda c, v: None
@@ -477,16 +557,9 @@ class FunctionGeneratorApp:
 
     # ------------------------------------------------- waveform config
     def _build_config(self, parent):
-        p = self._panel(parent, "WAVEFORM CONFIGURATION")
+        p = self._panel(parent, "Waveform parameters")
         p.grid(row=0, column=0, sticky="ew", pady=(0, 6))
-        p.columnconfigure(3, weight=1)
-
-        ro = ttk.Frame(p, style="Panel.TFrame")           # big read-outs
-        ro.grid(row=0, column=0, columnspan=5, sticky="ew", pady=(0, 6))
-        self.big_freq = ttk.Label(ro, text="", font=FONT_BIG, foreground=C["accent"])
-        self.big_freq.pack(side="left", padx=(6, 24))
-        self.big_vpp = ttk.Label(ro, text="", font=FONT_BIG, foreground=C["trace"])
-        self.big_vpp.pack(side="left")
+        p.columnconfigure(3, weight=1, minsize=70)
 
         ttk.Label(p, text="Waveform").grid(row=1, column=0, sticky="w", padx=(6, 8), pady=4)
         self.wave_var = tk.StringVar(value="Sine")
@@ -498,174 +571,317 @@ class FunctionGeneratorApp:
         lo, hi = config.OUTPUT_MODES[config.DEFAULT_OUTPUT_MODE]
         cb = self._on_param_change
         self.freq = FreqControl(p, 2, cb)
-        self.vpp = ParamControl(p, 3, "Amplitude (Vpp)", "V", config.VPP_MIN,
+        self.vpp = ParamControl(p, 3, "Amplitude", "Vpp", config.VPP_MIN,
                                 config.VPP_MAX, 2.0, 2, cb)
         self.offset = ParamControl(p, 4, "DC Offset", "V", lo, hi, 1.0, 2, cb)
         self.phase = ParamControl(p, 5, "Phase", "\u00b0", config.PHASE_MIN,
                                   config.PHASE_MAX, 0.0, 0, cb)
         ttk.Button(p, text="Reset phase", command=self._reset_phase).grid(
-            row=5, column=4, padx=(0, 6))
+            row=10, column=0, columnspan=2, sticky="w", padx=6, pady=(6, 0))
         self.duty = ParamControl(p, 6, "Duty Cycle", "%", config.DUTY_MIN,
                                  config.DUTY_MAX, 50.0, 0, cb)
 
         ttk.Label(p, text=("Vpp = peak-to-peak (the controlled value).  Peak = Vpp/2.  "
-                           "RMS depends on the waveform (see Output Information)."),
-                  foreground=C["dim"], wraplength=520).grid(
+                           "RMS depends on the waveform (see Output details)."),
+                  foreground=C["dim"], wraplength=340).grid(
             row=7, column=0, columnspan=5, sticky="w", padx=6, pady=(4, 0))
-        self.expected_lbl = ttk.Label(p, text="", font=FONT_BOLD)
+        self.expected_lbl = ttk.Label(p, text="", font=FONT_BOLD, wraplength=340)
         self.expected_lbl.grid(row=8, column=0, columnspan=5, sticky="w", padx=6, pady=2)
-        self.error_lbl = ttk.Label(p, text="", foreground=C["err"], wraplength=520)
+        self.error_lbl = ttk.Label(p, text="", foreground=C["err"], wraplength=340)
         self.error_lbl.grid(row=9, column=0, columnspan=5, sticky="w", padx=6)
 
     def _build_hardware(self, parent):
-        p = self._panel(parent, "HARDWARE OUTPUT LIMITS")
+        p = self._panel(parent, "Hardware output limits")
         p.grid(row=1, column=0, sticky="ew", pady=6)
         p.columnconfigure(1, weight=1)
         ttk.Label(p, text="Output configuration").grid(row=0, column=0, sticky="w", padx=6)
         self.out_mode_var = tk.StringVar(value=config.DEFAULT_OUTPUT_MODE)
         cb = ttk.Combobox(p, textvariable=self.out_mode_var, state="readonly",
                           values=list(config.OUTPUT_MODES), width=34)
-        cb.grid(row=0, column=1, sticky="w", padx=4, pady=3)
+        cb.grid(row=1, column=0, columnspan=2, sticky="ew", padx=6, pady=(6, 10))
         cb.bind("<<ComboboxSelected>>", lambda e: self._on_output_mode())
         ttk.Label(p, text=config.HW_LIMIT_MESSAGE, foreground=C["dim"],
-                  wraplength=520).grid(row=1, column=0, columnspan=2, sticky="w",
+                  wraplength=340).grid(row=2, column=0, columnspan=2, sticky="w",
                                        padx=6, pady=2)
-        self.warn_lbl = ttk.Label(p, text="", wraplength=520, font=FONT_BOLD)
-        self.warn_lbl.grid(row=2, column=0, columnspan=2, sticky="w", padx=6, pady=2)
+        self.warn_lbl = ttk.Label(p, text="", wraplength=340, font=FONT_BOLD)
+        self.warn_lbl.grid(row=3, column=0, columnspan=2, sticky="w", padx=6, pady=2)
 
     # ---------------------------------------------------- right column
     def _build_esp_status(self, parent):
-        p = self._panel(parent, "ESP32 STATUS")
-        p.grid(row=0, column=0, sticky="ew", pady=(0, 6))
-        self.state_lbl = ttk.Label(p, text="", font=FONT_BIG)
-        self.state_lbl.grid(row=0, column=0, columnspan=4, sticky="w", padx=6, pady=(0, 4))
+        p = ttk.Frame(parent, padding=10)
+        p.grid(row=0, column=0, sticky="nsew")
         self.st = kv_grid(p, [
-            ("conn", "Link"), ("port", "Port"),
-            ("wave", "Waveform"), ("freq", "Frequency"),
-            ("vpp", "Amplitude"), ("phase", "Phase"),
-            ("state", "Output"), ("fs", "Sample rate"),
-            ("samples", "Samples"), ("fw", "Firmware"),
-        ], start_row=1)
+            ("conn", "Link"), ("port", "Port"), ("wave", "Waveform"),
+            ("freq", "Frequency"), ("vpp", "Amplitude"), ("phase", "Phase"),
+            ("state", "Output"), ("fs", "Sample rate"), ("samples", "Samples"),
+            ("fw", "Firmware"),
+        ], ncols=3)
+        self.conn_status = ttk.Label(p, text="● Disconnected", foreground=C["err"], font=FONT_BOLD)
+        self.conn_status.grid(row=4, column=0, columnspan=2, sticky="w", padx=6, pady=(6, 0))
+        self.conn_port = ttk.Label(p, text="Port: —", foreground=C["dim"])
+        self.conn_port.grid(row=4, column=2, columnspan=4, sticky="w", padx=6, pady=(6, 0))
 
     def _build_output_info(self, parent):
-        p = self._panel(parent, "OUTPUT INFORMATION (configured)")
-        p.grid(row=1, column=0, sticky="ew", pady=6)
+        p = ttk.Frame(parent, padding=10)
+        p.grid(row=0, column=0, sticky="nsew")
         self.info = kv_grid(p, [
-            ("wave", "Waveform"), ("freq", "Frequency"),
-            ("vpp", "Vpp"), ("peak", "Peak"),
-            ("rms_ac", "RMS (AC)"), ("rms_tot", "RMS (total)"),
-            ("offset", "DC offset"), ("phase", "Phase"),
-            ("duty", "Duty"), ("vmin", "Min voltage"),
-            ("vmax", "Max voltage"),
-        ])
+            ("wave", "Waveform"), ("freq", "Frequency"), ("vpp", "Vpp"),
+            ("peak", "Peak"), ("rms_ac", "RMS (AC)"), ("rms_tot", "RMS (total)"),
+            ("offset", "DC offset"), ("phase", "Phase"), ("duty", "Duty"),
+            ("vmin", "Min voltage"), ("vmax", "Max voltage"),
+        ], ncols=3)
 
     def _build_monitor(self, parent):
-        p = self._panel(parent, "MONITORING  (configured vs. measured)")
-        p.grid(row=2, column=0, sticky="ew", pady=(6, 0))
-        heads = ["", "Configured (PC)", "Reported (ESP32)", "Measured"]
-        for c, h in enumerate(heads):
+        p = ttk.Frame(parent, padding=10)
+        p.grid(row=0, column=0, sticky="nsew")
+        for c, h in enumerate(["Parameter", "Configured (PC)", "Reported (ESP32)", "Measured"]):
+            p.columnconfigure(c, weight=1)
             ttk.Label(p, text=h, foreground=C["dim"], font=FONT_BOLD).grid(
-                row=0, column=c, sticky="w", padx=6)
+                row=0, column=c, sticky="w", padx=6, pady=(0, 10))
         self.mon = {}
         for r, (key, name) in enumerate([("freq", "Frequency"), ("state", "Output state"),
                                          ("dac", "DAC level"), ("fs", "Sample rate")], 1):
-            ttk.Label(p, text=name).grid(row=r, column=0, sticky="w", padx=6, pady=1)
+            ttk.Label(p, text=name).grid(row=r, column=0, sticky="w", padx=6, pady=4)
             cells = []
             for c in (1, 2, 3):
-                lbl = ttk.Label(p, text="\u2014", font=FONT_MONO)
-                lbl.grid(row=r, column=c, sticky="w", padx=6, pady=1)
+                lbl = ttk.Label(p, text="—", font=FONT_MONO)
+                lbl.grid(row=r, column=c, sticky="w", padx=6, pady=4)
                 cells.append(lbl)
             self.mon[key] = cells
 
-    # ---------------------------------------------------------- preview
+    def _build_details(self):
+        # Keep diagnostics in a separate non-modal window so they never squeeze the trace.
+        self.details_window = tk.Toplevel(self.root)
+        self.details_window.withdraw()
+        self.details_window.title("Function generator — Details & serial log")
+        self.details_window.configure(bg=C["bg"])
+        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        self.details_window.geometry(f"{min(round(1100 * self.ui_scale), sw - 80)}x"
+                                     f"{min(round(380 * self.ui_scale), sh - 120)}+40+80")
+        self.details_window.minsize(min(700, sw - 80), min(280, sh - 120))
+        self.details_window.protocol("WM_DELETE_WINDOW", self._toggle_details)
+        self.details_window.columnconfigure(0, weight=1)
+        self.details_window.rowconfigure(0, weight=1)
+        self.details_frame = tk.Frame(self.details_window, bg=C["bg"], padx=12, pady=12)
+        self.details_frame.grid(row=0, column=0, sticky="nsew")
+        self.details_frame.columnconfigure(0, weight=1)
+        self.details_frame.rowconfigure(0, weight=1)
+        self.details_tabs = ttk.Notebook(self.details_frame)
+        self.details_tabs.grid(row=0, column=0, sticky="nsew")
+        for title, builder in [("Output details", self._build_output_info),
+                               ("Device status", self._build_esp_status),
+                               ("Monitoring", self._build_monitor), ("Serial log", self._build_log)]:
+            # Horizontal overflow is scrollable for long device/measurement fields.
+            page = tk.Frame(self.details_tabs, bg=C["panel"])
+            page.columnconfigure(0, weight=1)
+            page.rowconfigure(0, weight=1)
+            self.details_tabs.add(page, text=title)
+            if title == "Serial log":
+                builder(page)
+                continue
+            view = tk.Canvas(page, bg=C["panel"], highlightthickness=0, width=1, height=1)
+            view.grid(row=0, column=0, sticky="nsew")
+            xs = ttk.Scrollbar(page, orient="horizontal", command=view.xview)
+            ys = ttk.Scrollbar(page, orient="vertical", command=view.yview)
+            xs.grid(row=1, column=0, sticky="ew")
+            ys.grid(row=0, column=1, sticky="ns")
+            view.configure(xscrollcommand=xs.set, yscrollcommand=ys.set)
+            inner = ttk.Frame(view)
+            inner.columnconfigure(0, weight=1)
+            inner.rowconfigure(0, weight=1)
+            builder(inner)
+            window = view.create_window((0, 0), window=inner, anchor="nw")
+            inner.bind("<Configure>", lambda e, v=view: v.configure(scrollregion=v.bbox("all")))
+            view.bind("<Configure>", lambda e, v=view, w=window, i=inner:
+                      v.itemconfigure(w, width=max(e.width, i.winfo_reqwidth())))
+
     def _build_preview(self):
-        frame = ttk.LabelFrame(self.root, text=" WAVEFORM PREVIEW (software estimate) ",
-                               padding=4)
-        frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=4)
+        self.preview_frame = tk.Frame(self.main_area, bg=C["panel"],
+                                      highlightbackground=C["border"], highlightthickness=1)
+        frame = self.preview_frame
+        frame.grid(row=0, column=0, sticky="nsew")
         frame.columnconfigure(0, weight=1)
-        frame.rowconfigure(0, weight=1)
-        self.fig = Figure(figsize=(9, 3.2), dpi=100, facecolor=C["panel"])
+        frame.rowconfigure(2, weight=1)
+        heading = tk.Frame(frame, bg=C["panel"])
+        heading.grid(row=0, column=0, sticky="ew", padx=18, pady=(14, 0))
+        tk.Label(heading, text="WAVEFORM PREVIEW", bg=C["panel"], fg=C["fg"],
+                 font=FONT_BOLD).pack(side="left")
+        self.focus_button = ttk.Button(heading, text="Focus preview", command=self._toggle_focus)
+        self.focus_button.pack(side="right")
+        readouts = tk.Frame(frame, bg=C["panel"])
+        readouts.grid(row=1, column=0, sticky="ew", padx=18, pady=(4, 0))
+        self.big_freq = ttk.Label(readouts, text="", font=FONT_BIG, foreground=C["accent"])
+        self.big_freq.pack(side="left", padx=(0, 26))
+        self.big_vpp = ttk.Label(readouts, text="", font=FONT_BIG, foreground=C["trace"])
+        self.big_vpp.pack(side="left")
+        self.preview_wave_lbl = ttk.Label(readouts, text="SINE", foreground=C["dim"], font=FONT_BOLD)
+        self.preview_wave_lbl.pack(side="right")
+
+        self.fig = Figure(figsize=(9, 5.6), dpi=100, facecolor=C["panel"])
         self.ax = self.fig.add_subplot(111)
         ax = self.ax
         ax.set_facecolor(C["plot_bg"])
-        ax.grid(True, color=C["grid"], linewidth=0.8)
+        ax.set_axisbelow(True)
+        ax.grid(True, color=C["grid"], linewidth=0.9)
+        ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+        ax.yaxis.set_minor_locator(AutoMinorLocator(2))
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=6, min_n_ticks=4))
+        ax.grid(True, which="minor", color=C["grid"], linewidth=0.5, alpha=0.45)
         for spine in ax.spines.values():
             spine.set_color(C["border"])
-        ax.tick_params(colors=C["dim"])
-        ax.xaxis.label.set_color(C["fg"])
-        ax.yaxis.label.set_color(C["fg"])
-        ax.set_ylabel("Voltage (V)")
-        self.line, = ax.plot([], [], color=C["trace"], linewidth=1.8)
+        ax.tick_params(colors=C["dim"], labelsize=10, pad=7)
+        ax.tick_params(which="minor", colors=C["border"])
+        ax.xaxis.label.set_color(C["dim"])
+        ax.yaxis.label.set_color(C["dim"])
+        ax.set_ylabel("Voltage (V)", fontsize=10, labelpad=10)
+        self.line, = ax.plot([], [], color=C["trace"], linewidth=2.6,
+                             solid_capstyle="round", label="Configured waveform")
         self.hw_lines = [
-            ax.axhline(0, color=C["warn"], linestyle="--", linewidth=1, alpha=0.7,
-                       label="Hardware limits"),
-            ax.axhline(3.3, color=C["warn"], linestyle="--", linewidth=1, alpha=0.7),
+            ax.axhline(0, color=C["warn"], linestyle=(0, (5, 5)), linewidth=1.1, alpha=0.8),
+            ax.axhline(3.3, color=C["warn"], linestyle=(0, (5, 5)), linewidth=1.1, alpha=0.8),
         ]
-        ax.legend(loc="upper right", facecolor=C["panel"], edgecolor=C["border"],
-                  labelcolor=C["dim"], fontsize=8)
-        self.fig.subplots_adjust(left=0.07, right=0.985, top=0.87, bottom=0.18)
+        self.fig.subplots_adjust(left=0.10, right=0.975, top=0.95, bottom=0.15)
         self.canvas = FigureCanvasTkAgg(self.fig, master=frame)
-        self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+        plot_widget = self.canvas.get_tk_widget()
+        plot_widget.configure(width=1, height=1, highlightthickness=0)
+        plot_widget.grid(row=2, column=0, sticky="nsew", padx=4)
+        self.canvas.mpl_connect("resize_event", self._resize_plot)
+        plot_widget.bind("<Map>", lambda e: self.root.after_idle(self._resize_plot), add="+")
+        toolbar = tk.Frame(frame, bg=C["panel"])
+        toolbar.grid(row=3, column=0, sticky="ew", padx=18, pady=(0, 10))
+        ttk.Label(toolbar, text="Cycles", foreground=C["dim"]).pack(side="left")
+        self.preview_cycles = tk.StringVar(value="4")
+        cycles = ttk.Combobox(toolbar, textvariable=self.preview_cycles, values=["2", "4", "8"],
+                              state="readonly", width=2)
+        cycles.pack(side="left", padx=(6, 16))
+        cycles.bind("<<ComboboxSelected>>", lambda e: self._schedule_refresh())
+        ttk.Label(toolbar, text="Scale", foreground=C["dim"]).pack(side="left")
+        self.preview_scale = tk.StringVar(value="Fit waveform")
+        scale = ttk.Combobox(toolbar, textvariable=self.preview_scale,
+                             values=["Fit waveform", "Hardware range"], state="readonly", width=16)
+        scale.pack(side="left", padx=6)
+        scale.bind("<<ComboboxSelected>>", lambda e: self._schedule_refresh())
+        ttk.Label(toolbar, text="- -  Hardware limits", foreground=C["warn"]).pack(side="right")
+        self.preview_note = tk.Label(frame, text="Software estimate | not a measured signal",
+                                     bg=C["panel"], fg=C["dim"], font=FONT_UI, anchor="w")
+        self.preview_note.grid(row=4, column=0, sticky="ew", padx=18, pady=(0, 12))
+        self.preview_note.bind("<Configure>", lambda e:
+                               e.widget.configure(wraplength=max(180, e.width - 4)))
+
+    def _resize_plot(self, event=None):
+        """Fit the actual Tk canvas, including fractional Windows/Linux DPI scaling."""
+        widget = self.canvas.get_tk_widget()
+        w, h = max(widget.winfo_width(), 1), max(widget.winfo_height(), 1)
+        self.fig.set_size_inches(w / self.fig.dpi, h / self.fig.dpi, forward=False)
+        self.fig.subplots_adjust(left=min(0.20, 76 / w), right=1 - min(0.05, 22 / w),
+                                 bottom=min(0.30, 52 / h), top=1 - min(0.08, 18 / h))
+        self.canvas.draw_idle()
 
     def _build_summary(self):
-        f = tk.Frame(self.root, bg=C["bg"])
-        f.grid(row=3, column=0, sticky="ew", padx=10, pady=4)
+        f = tk.Frame(self.main_area, bg=C["bg"])
+        self.summary_frame = f
+        f.grid(row=1, column=0, sticky="ew", pady=(10, 0))
         self.chips = {}
-        for i, (key, title) in enumerate([("vpp", "Vpp"), ("rms", "RMS"),
-                                          ("offset", "Offset"), ("phase", "Phase"),
-                                          ("freq", "Frequency"), ("duty", "Duty")]):
+        for i, (key, title) in enumerate([("vpp", "AMPLITUDE / Vpp"), ("rms", "RMS / AC"),
+                                          ("offset", "DC OFFSET"), ("phase", "PHASE"),
+                                          ("freq", "FREQUENCY"), ("duty", "DUTY")]):
             f.columnconfigure(i, weight=1, uniform="chip")
-            chip = tk.Frame(f, bg=C["panel2"], highlightbackground=C["border"],
-                            highlightthickness=1)
-            chip.grid(row=0, column=i, sticky="ew", padx=3)
-            tk.Label(chip, text=title, bg=C["panel2"], fg=C["dim"],
-                     font=("Helvetica", 9)).pack(pady=(4, 0))
-            lbl = tk.Label(chip, text="\u2014", bg=C["panel2"], fg=C["fg"], font=FONT_CHIP)
-            lbl.pack(pady=(0, 4))
+            chip = tk.Frame(f, bg=C["panel"], highlightbackground=C["border"], highlightthickness=1)
+            chip.grid(row=0, column=i, sticky="nsew", padx=(0 if i == 0 else 4, 0))
+            tk.Label(chip, text=title, bg=C["panel"], fg=C["dim"],
+                     font=(FONT_UI[0], 8, "bold")).pack(pady=(10, 2))
+            lbl = tk.Label(chip, text="—", bg=C["panel"], fg=C["fg"], font=FONT_CHIP)
+            lbl.pack(fill="x", pady=(0, 10))
+            chip.bind("<Configure>", lambda e, label=lbl: self._fit_readout(label, e.width))
             self.chips[key] = lbl
+
+    def _fit_readout(self, label, width):
+        font = tkfont.Font(family=FONT_UI[0], size=16, weight="bold")
+        for size in range(16, 9, -1):
+            font.configure(size=size)
+            if font.measure(label.cget("text")) <= width - 12:
+                break
+        label.configure(font=(FONT_UI[0], size, "bold"))
 
     def _build_buttons(self):
         f = tk.Frame(self.root, bg=C["bg"])
-        f.grid(row=4, column=0, sticky="ew", padx=10, pady=4)
-        for i in range(4):
-            f.columnconfigure(i, weight=1)
+        f.grid(row=3, column=0, sticky="ew", padx=18, pady=(0, 12))
         self.ctrl_buttons = []
         specs = [("START", C["ok"], self.on_start), ("STOP", C["err"], self.on_stop),
-                 ("PAUSE", C["warn"], self.on_pause), ("RESET", "#9aa7b5", self.on_reset)]
+                 ("PAUSE", C["warn"], self.on_pause), ("RESET", "#b4c4da", self.on_reset)]
         for i, (text, color, cmd) in enumerate(specs):
-            b = tk.Button(f, text=text, command=cmd, bg=color, fg="#0b0e11",
-                          activebackground=color, disabledforeground="#5b6672",
-                          font=("Helvetica", 14, "bold"), height=2, relief="flat",
-                          bd=0, cursor="hand2")
-            b.grid(row=0, column=i, sticky="ew", padx=6)
+            b = tk.Button(f, text=text, command=cmd, bg=color, fg=C["bg"],
+                          activebackground=color, disabledforeground=C["dim"],
+                          font=FONT_BOLD, width=10, padx=8, pady=12, relief="flat",
+                          bd=0, cursor="hand2", highlightthickness=0)
+            b.grid(row=0, column=i, sticky="ew", padx=(0, 8))
             self.ctrl_buttons.append((b, color))
-        self.btn_start, self.btn_stop, self.btn_pause, self.btn_reset = (
-            b for b, _ in self.ctrl_buttons)
+        self.btn_start, self.btn_stop, self.btn_pause, self.btn_reset = (b for b, _ in self.ctrl_buttons)
+        f.columnconfigure(4, weight=1)
         self.live_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(f, text="Live update while running (re-send CONFIG when a value changes)",
-                        variable=self.live_var, style="Root.TCheckbutton").grid(
-            row=1, column=0, columnspan=4, sticky="w", padx=8, pady=(4, 0))
+        ttk.Checkbutton(f, text="Live update while running", variable=self.live_var,
+                        style="Root.TCheckbutton").grid(row=0, column=4, sticky="w", padx=12)
+        self.details_button = ttk.Button(f, text="Show details & log", command=self._toggle_details)
+        self.details_button.grid(row=0, column=5, sticky="e")
 
-    def _build_log(self):
-        f = tk.Frame(self.root, bg=C["bg"])
-        f.grid(row=5, column=0, sticky="ew", padx=10, pady=(4, 0))
+    def _toggle_details(self):
+        if self._focused:
+            self._toggle_focus()
+        self._details_visible = not self._details_visible
+        self._show_details()
+
+    def _show_details(self):
+        if self._details_visible:
+            self.details_window.deiconify()
+            self.details_window.lift()
+        else:
+            self.details_window.withdraw()
+        self.details_button.configure(text="Hide details & log" if self._details_visible else "Show details & log")
+
+    def _toggle_focus(self):
+        self._focused = not self._focused
+        if self._focused:
+            self._sidebar_width = self.sidebar.winfo_width()
+            self.workspace.forget(self.sidebar)
+            self.connection_bar.grid_remove()
+            self.summary_frame.grid_remove()
+            self.details_window.withdraw()
+        else:
+            self.workspace.add(self.sidebar, before=self.main_area,
+                               minsize=round(395 * self.ui_scale),
+                               width=self._sidebar_width, stretch="never")
+            self.connection_bar.grid()
+            self.summary_frame.grid()
+            self._show_details()
+        self.focus_button.configure(text="Restore workspace" if self._focused else "Focus preview")
+
+    def _toggle_fullscreen(self, event=None):
+        self.root.attributes("-fullscreen", not bool(self.root.attributes("-fullscreen")))
+        return "break"
+
+    def _exit_focus(self, event=None):
+        self.root.attributes("-fullscreen", False)
+        if self._focused:
+            self._toggle_focus()
+        return "break"
+
+    def _build_log(self, parent):
+        f = ttk.Frame(parent, padding=8)
+        f.grid(row=0, column=0, sticky="nsew")
         f.columnconfigure(0, weight=1)
+        f.rowconfigure(0, weight=1)
         self.log = tk.Text(f, height=5, bg=C["field"], fg=C["fg"], bd=0,
-                           highlightthickness=1, highlightbackground=C["border"],
-                           font=("Courier", 9), state="disabled", wrap="none")
+                           highlightthickness=0, font=(FONT_MONO[0], 10),
+                           state="disabled", wrap="none", padx=10, pady=6)
         sb = ttk.Scrollbar(f, orient="vertical", command=self.log.yview)
-        self.log.configure(yscrollcommand=sb.set)
-        self.log.grid(row=0, column=0, sticky="ew")
+        xs = ttk.Scrollbar(f, orient="horizontal", command=self.log.xview)
+        self.log.configure(yscrollcommand=sb.set, xscrollcommand=xs.set)
+        self.log.grid(row=0, column=0, sticky="nsew")
         sb.grid(row=0, column=1, sticky="ns")
-        self.log.tag_configure("tx", foreground=C["accent"])
-        self.log.tag_configure("rx", foreground=C["fg"])
-        self.log.tag_configure("info", foreground=C["dim"])
-        self.log.tag_configure("ok", foreground=C["ok"])
-        self.log.tag_configure("warn", foreground=C["warn"])
-        self.log.tag_configure("err", foreground=C["err"])
-        self.msg_lbl = tk.Label(self.root, text="Ready.", anchor="w", bg=C["header"],
-                                fg=C["dim"], font=FONT_UI)
-        self.msg_lbl.grid(row=6, column=0, sticky="ew", pady=(4, 0), ipady=3)
+        xs.grid(row=1, column=0, sticky="ew")
+        for tag, color in [("tx", C["accent"]), ("rx", C["fg"]), ("info", C["dim"]),
+                           ("ok", C["ok"]), ("warn", C["warn"]), ("err", C["err"])]:
+            self.log.tag_configure(tag, foreground=color)
 
     # ==================================================================
     # Logging / messages
@@ -816,6 +1032,10 @@ class FunctionGeneratorApp:
         self.chips["freq"].configure(text=freq_txt)
         self.chips["duty"].configure(text=duty_txt)
 
+        for label in self.chips.values():
+            if label.master.winfo_width() > 1:
+                self._fit_readout(label, label.master.winfo_width())
+
         # expected output range + warnings + input errors
         self.expected_lbl.configure(
             text=f"Expected output:  min {lo:.2f} V   max {hi:.2f} V",
@@ -830,21 +1050,26 @@ class FunctionGeneratorApp:
         self.error_lbl.configure(text="\n".join(self._errors()))
 
         # plot
-        t, v, unit, scale = waveform.preview(s)
+        t, v, unit, scale = waveform.preview(s, cycles=int(self.preview_cycles.get()))
         self.line.set_data(t * scale, v)
         self.line.set_color(C["warn"] if warnings else C["trace"])
         self.ax.set_xlim(0, t[-1] * scale)
-        ymin, ymax = min(lo, hw_lo), max(hi, hw_hi)
-        pad = max(0.25, 0.12 * (ymax - ymin))
+        if self.preview_scale.get() == "Hardware range":
+            ymin, ymax = min(lo, hw_lo), max(hi, hw_hi)
+        else:
+            ymin, ymax = lo, hi
+        pad = max(0.10, 0.15 * (ymax - ymin))
         self.ax.set_ylim(ymin - pad, ymax + pad)
         self.hw_lines[0].set_ydata([hw_lo, hw_lo])
         self.hw_lines[1].set_ydata([hw_hi, hw_hi])
         self.ax.set_xlabel(f"Time ({unit})")
-        title = (f"{s.wave}   |   {freq_txt}   |   {s.vpp:.2f} Vpp   |   "
-                 f"offset {s.offset:.2f} V   |   phase {s.phase_deg:g}\u00b0")
-        if duty_on:
-            title += f"   |   duty {s.duty_pct:g} %"
-        self.ax.set_title(title, color=C["fg"], fontsize=10)
+        self.preview_wave_lbl.configure(text=s.wave.upper())
+        note = "Software estimate | not a measured signal"
+        if warnings:
+            note += "  |  Requested output exceeds hardware limits"
+        elif self._errors():
+            note += "  |  Showing the last valid settings"
+        self.preview_note.configure(text=note, fg=C["warn"] if warnings else C["dim"])
         self.canvas.draw_idle()
 
         self._update_monitor()
