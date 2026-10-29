@@ -1,0 +1,52 @@
+[
+  {
+    "name": "type:bug",
+    "color": "D73A4A",
+    "description": "A reproducible defect"
+  },
+  {
+    "name": "type:enhancement",
+    "color": "A2EEEF",
+    "description": "An improvement to application behavior or presentation"
+  },
+  {
+    "name": "type:documentation",
+    "color": "0075CA",
+    "description": "Documentation and release notes"
+  },
+  {
+    "name": "area:gui",
+    "color": "5319E7",
+    "description": "Python desktop interface and waveform preview"
+  },
+  {
+    "name": "area:firmware",
+    "color": "F9D0C4",
+    "description": "ESP32 firmware and DAC output"
+  },
+  {
+    "name": "area:serial",
+    "color": "1D76DB",
+    "description": "Serial transport and command protocol"
+  },
+  {
+    "name": "area:repository",
+    "color": "C5DEF5",
+    "description": "Version control, CI and repository setup"
+  },
+  {
+    "name": "priority:high",
+    "color": "B60205",
+    "description": "Blocks an important project function"
+  },
+  {
+    "name": "priority:normal",
+    "color": "FBCA04",
+    "description": "Normal project priority"
+  },
+  {
+    "name": "status:needs-testing",
+    "color": "FEF2C0",
+    "description": "Needs verification before completion"
+  }
+]
