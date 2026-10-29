@@ -1,7 +1,5 @@
 # Contributors
 
-Replace the placeholders with both teammates' real details before committing.
-
 |Member|Name|GitHub username|Work recorded in this import|
 |-|-|-|-|
 |A|Naveen Ram|NaveenRam30|Import and review original baseline; repository setup|
