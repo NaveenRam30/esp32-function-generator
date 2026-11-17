@@ -1,33 +1,26 @@
-# ESP32 Function Generator with Python GUI
+# ESP32 Function Generator — Firmware
 
-This repository keeps firmware and desktop software on separate long-lived branches.
+Branch: `esp32-firmware`. Tag: `firmware-v1.0.0`.
 
-| Branch | Contents | Release tags |
-| --- | --- | --- |
-| `main` | Project overview and team information | None |
-| `esp32-firmware` | ESP32 Arduino sketch and firmware documentation | `firmware-v1.0.0` |
-| `python-gui` | Python desktop application and GUI documentation | `gui-v1.0.0`, `gui-v2.0.0` |
+Open `esp32_function_generator/esp32_function_generator.ino` in Arduino IDE.
+The supplied sketch targets a classic ESP32 with an internal DAC (GPIO25 / DAC1).
+Its source supports Arduino-ESP32 core 2.x/3.x via conditional compilation;
+verify the actual board/core combination before flashing.
 
-Select the relevant branch in GitHub's branch menu. The two application branches
-intentionally contain different files. Component work merges into its component
-branch; neither component branch is merged into main in this repository layout.
+This is the unchanged sketch from both supplied completed-project archives.
+Internal FW_VERSION is 1.0.0. Serial control is 115200 baud, newline-terminated
+ASCII. Use the `python-gui` branch for the matching PC controller.
 
-To keep both components available locally, clone once and add worktrees:
+## Version history
 
-```bash
-git clone https://github.com/OWNER/esp32-function-generator.git
-cd esp32-function-generator
-git worktree add ../function-generator-firmware esp32-firmware
-git worktree add ../function-generator-gui python-gui
-```
+- firmware-v1.0.0: import and review the existing ESP32 function generator sketch.
+- No second distinct firmware version was present in the supplied archives.
 
-Flash the sketch from the firmware worktree, then run `python main.py` in the
-GUI worktree after installing requirements. GUI V1 and V2 use identical firmware
-and serial protocol. The preview is calculated rather than measured output.
+## Verification
 
-This completed project is being imported into version control now. Import dates
-are not original development dates. See CONTRIBUTORS.md for verified team roles.
+Record actual board, Arduino core, upload result and DSO observations here or in
+a component pull request. Firmware compilation and hardware operation have not
+been verified during repository packaging.
 
-Issue/PR label definitions are in `.github/labels.json`; create these labels on
-GitHub manually. Tags are repository-wide, so prefix component versions with
-`firmware-` and `gui-`. GUI V2 is a milestone name for a compatible visual update.
+Future work: create `feat/firmware-description` or `fix/firmware-description`
+from this branch; open pull requests with base `esp32-firmware`.
